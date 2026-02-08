@@ -10,7 +10,9 @@ import {
   PiggyBank,
   Calculator,
   Menu,
-  X
+  X,
+  Repeat,
+  SearchCode
 } from 'lucide-react'
 
 type NavItem = {
@@ -22,9 +24,10 @@ type NavItem = {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
   { id: 'transactions', label: 'Transaktionen', icon: <ArrowLeftRight size={20} /> },
+  { id: 'fixkosten', label: 'Fixkosten', icon: <Repeat size={20} /> },
+  { id: 'deepdive', label: 'Deep Dive', icon: <SearchCode size={20} /> },
   { id: 'import', label: 'CSV Import', icon: <Upload size={20} /> },
-  { id: 'categories', label: 'Kategorien', icon: <Tags size={20} /> },
-  { id: 'budget', label: 'Budget', icon: <Target size={20} /> },
+  { id: 'budget', label: 'Budgets', icon: <Target size={20} /> },
   { id: 'savings', label: 'Sparziele', icon: <PiggyBank size={20} /> },
   { id: 'salary', label: 'Gehaltsrechner', icon: <Calculator size={20} /> },
 ]

@@ -9,6 +9,8 @@ import Categories from '@/components/Categories'
 import BudgetOverview from '@/components/BudgetOverview'
 import SavingsGoals from '@/components/SavingsGoals'
 import SalaryCalculator from '@/components/SalaryCalculator'
+import FixedCosts from '@/components/FixedCosts'
+import DeepDive from '@/components/DeepDive'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -17,6 +19,8 @@ export default function Home() {
     switch (activeTab) {
       case 'dashboard': return <Dashboard />
       case 'transactions': return <Transactions />
+      case 'fixkosten': return <FixedCosts />
+      case 'deepdive': return <DeepDive />
       case 'import': return <CSVImport />
       case 'categories': return <Categories />
       case 'budget': return <BudgetOverview />
