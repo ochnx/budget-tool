@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import Navigation from '@/components/Navigation'
 import ErrorBoundary from '@/components/ErrorBoundary'
 
+const Navigation = dynamic(() => import('@/components/Navigation'), { ssr: false })
 const Dashboard = dynamic(() => import('@/components/Dashboard'), { ssr: false })
 const Transactions = dynamic(() => import('@/components/Transactions'), { ssr: false })
 const CSVImport = dynamic(() => import('@/components/CSVImport'), { ssr: false })
@@ -17,6 +17,19 @@ const DeepDive = dynamic(() => import('@/components/DeepDive'), { ssr: false })
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent" />
+      </div>
+    )
+  }
 
   function renderContent() {
     switch (activeTab) {
