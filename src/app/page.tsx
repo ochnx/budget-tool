@@ -1,17 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import Navigation from '@/components/Navigation'
-import Dashboard from '@/components/Dashboard'
-import Transactions from '@/components/Transactions'
-import CSVImport from '@/components/CSVImport'
-import Categories from '@/components/Categories'
-import BudgetOverview from '@/components/BudgetOverview'
-import SavingsGoals from '@/components/SavingsGoals'
-import SalaryCalculator from '@/components/SalaryCalculator'
-import FixedCosts from '@/components/FixedCosts'
-import DeepDive from '@/components/DeepDive'
 import ErrorBoundary from '@/components/ErrorBoundary'
+
+const Dashboard = dynamic(() => import('@/components/Dashboard'), { ssr: false })
+const Transactions = dynamic(() => import('@/components/Transactions'), { ssr: false })
+const CSVImport = dynamic(() => import('@/components/CSVImport'), { ssr: false })
+const Categories = dynamic(() => import('@/components/Categories'), { ssr: false })
+const BudgetOverview = dynamic(() => import('@/components/BudgetOverview'), { ssr: false })
+const SavingsGoals = dynamic(() => import('@/components/SavingsGoals'), { ssr: false })
+const SalaryCalculator = dynamic(() => import('@/components/SalaryCalculator'), { ssr: false })
+const FixedCosts = dynamic(() => import('@/components/FixedCosts'), { ssr: false })
+const DeepDive = dynamic(() => import('@/components/DeepDive'), { ssr: false })
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -34,8 +36,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-dark-950">
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-      
-      {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0">
         <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
           <ErrorBoundary>{renderContent()}</ErrorBoundary>
