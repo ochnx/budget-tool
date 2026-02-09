@@ -65,8 +65,8 @@ export default function SalaryCalculator() {
 
     const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0)
     const totalIncome = months.reduce((sum, m) => sum + m.income, 0)
-    const avgExpenses = totalExpenses / months.length
-    const avgIncome = totalIncome / months.length
+    const avgExpenses = months.length > 0 ? totalExpenses / months.length : 0
+    const avgIncome = months.length > 0 ? totalIncome / months.length : 0
     const maxExpenses = Math.max(...months.map(m => m.expenses))
     const minExpenses = Math.min(...months.map(m => m.expenses))
 

@@ -11,6 +11,7 @@ import SavingsGoals from '@/components/SavingsGoals'
 import SalaryCalculator from '@/components/SalaryCalculator'
 import FixedCosts from '@/components/FixedCosts'
 import DeepDive from '@/components/DeepDive'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -37,7 +38,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="lg:ml-64 pt-16 lg:pt-0">
         <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-          {renderContent()}
+          <ErrorBoundary>{renderContent()}</ErrorBoundary>
         </div>
       </main>
     </div>

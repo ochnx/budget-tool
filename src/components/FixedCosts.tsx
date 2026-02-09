@@ -105,7 +105,7 @@ export default function FixedCosts() {
       
       // Also match if 2+ transactions from same recipient with similar amounts
       const amounts = txs.map(t => Number(t.amount))
-      const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
+      const avgAmount = amounts.length > 0 ? amounts.reduce((a, b) => a + b, 0) / amounts.length : 0
       const hasSimilarAmounts = amounts.length >= 2 && amounts.every(a => Math.abs(a - avgAmount) / (avgAmount || 1) < 0.15)
       
       // KEYWORD MATCH = instant Fixkosten (even with 1 transaction!)
