@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase, Transaction, Category } from '@/lib/supabase'
 import { formatCurrency, getMonthName } from '@/lib/categories'
-import { TrendingUp, TrendingDown, Wallet, ArrowUpDown, ChevronLeft, ChevronRight, Percent } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, CalendarClock, Trophy, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 export default function Dashboard() {
@@ -46,24 +46,35 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const income = transactions.filter(t => t.is_income).reduce((sum, t) => sum + Number(t.amount), 0)
-    const expenses = transactions.filter(t => !t.is_income).reduce((sum, t) => sum + Number(t.amount), 0)
-    const balance = income - expenses
-    const txCount = transactions.length
+    // Expenses stored as negative amounts in DB → use Math.abs to get positive total
+    const expenses = Math.abs(transactions.filter(t => !t.is_income).reduce((sum, t) => sum + Number(t.amount), 0))
+    const remaining = income - expenses
 
-    // Category breakdown for expenses — ALL categories, sorted DESCENDING by total
+    // Days remaining in selected month (including today)
+    const now = new Date()
+    const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate()
+    const isCurrentMonth = now.getMonth() === selectedMonth.month && now.getFullYear() === selectedMonth.year
+    const daysLeft = isCurrentMonth ? Math.max(1, daysInMonth - now.getDate() + 1) : (
+      // Future month: full month; past month: 0
+      new Date(selectedMonth.year, selectedMonth.month, 1) > now ? daysInMonth : 0
+    )
+    const dailyBudget = daysLeft > 0 ? remaining / daysLeft : 0
+
+    // Category breakdown for expenses — ALL categories, sorted DESCENDING by total (positive values)
     const catMap = new Map<string, { name: string; icon: string; color: string; total: number }>()
     transactions.filter(t => !t.is_income).forEach(t => {
       const cat = t.category as Category | undefined
       const key = cat?.id || 'uncategorized'
       const existing = catMap.get(key)
+      const absAmount = Math.abs(Number(t.amount))
       if (existing) {
-        existing.total += Number(t.amount)
+        existing.total += absAmount
       } else {
         catMap.set(key, {
           name: cat?.name || 'Unkategorisiert',
           icon: cat?.icon || '❓',
           color: cat?.color || '#6B7280',
-          total: Number(t.amount),
+          total: absAmount,
         })
       }
     })
@@ -72,8 +83,10 @@ export default function Dashboard() {
     const categoryBreakdown = Array.from(catMap.values())
       .sort((a, b) => b.total - a.total)
 
-    return { income, expenses, balance, txCount, categoryBreakdown }
-  }, [transactions])
+    const topCategory = categoryBreakdown.length > 0 ? categoryBreakdown[0] : null
+
+    return { income, expenses, remaining, dailyBudget, daysLeft, topCategory, categoryBreakdown }
+  }, [transactions, selectedMonth])
 
   function prevMonth() {
     setSelectedMonth(prev => {
@@ -88,24 +101,6 @@ export default function Dashboard() {
       return { ...prev, month: prev.month + 1 }
     })
   }
-
-  // Determine if we have a partial month (less than 20 days of data)
-  const periodInfo = useMemo(() => {
-    if (transactions.length === 0) return { label: '', isPartial: false, daysCovered: 0, daysInMonth: 30 }
-    const dates = transactions.map(t => new Date(t.date).getTime())
-    const minDate = new Date(Math.min(...dates))
-    const maxDate = new Date(Math.max(...dates))
-    const daysCovered = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate()
-    const isPartial = daysCovered < daysInMonth * 0.7
-    const weekNum = Math.ceil(daysCovered / 7)
-    const label = isPartial ? `Woche 1–${weekNum}` : ''
-    return { label, isPartial, daysCovered, daysInMonth }
-  }, [transactions, selectedMonth])
-
-  // Savings rate = (Einnahmen - Ausgaben) / Einnahmen × 100
-  const savingsRate = stats.income > 0 ? ((stats.balance / stats.income) * 100) : 0
-  const savingsLabel = savingsRate < 0 ? `Defizit ${Math.abs(savingsRate).toFixed(1)}%` : `${savingsRate.toFixed(1)}%`
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -155,6 +150,7 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* 1. Einnahmen */}
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2.5 rounded-xl bg-emerald-500/15">
@@ -165,6 +161,7 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-emerald-400">{formatCurrency(stats.income)}</p>
         </div>
 
+        {/* 2. Ausgaben (positive Zahl) */}
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2.5 rounded-xl bg-red-500/15">
@@ -175,50 +172,50 @@ export default function Dashboard() {
           <p className="text-2xl font-bold text-red-400">{formatCurrency(stats.expenses)}</p>
         </div>
 
+        {/* 3. Noch übrig diesen Monat */}
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2.5 rounded-xl bg-cyan-500/15">
               <Wallet size={20} className="text-cyan-400" />
             </div>
-            <span className="text-sm text-dark-400">
-              Bilanz{periodInfo.isPartial ? ` (${periodInfo.label})` : ' diesen Monat'}
-            </span>
+            <span className="text-sm text-dark-400">Noch übrig diesen Monat</span>
           </div>
-          <p className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {stats.balance >= 0 ? '+' : ''}{formatCurrency(stats.balance)}
-          </p>
-          <p className="text-xs text-dark-500 mt-1">
-            {formatCurrency(stats.income)} Einnahmen − {formatCurrency(stats.expenses)} Ausgaben
+          <p className={`text-2xl font-bold ${stats.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatCurrency(stats.remaining)}
           </p>
         </div>
 
+        {/* 4. Tagesbudget */}
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2.5 rounded-xl bg-amber-500/15">
-              <Percent size={20} className="text-amber-400" />
+              <CalendarClock size={20} className="text-amber-400" />
             </div>
             <span className="text-sm text-dark-400">
-              Sparquote{periodInfo.isPartial ? ` (${periodInfo.label})` : ''}
+              {stats.daysLeft > 0 ? `Tagesbudget (${stats.daysLeft} Tage übrig)` : 'Tagesbudget'}
             </span>
           </div>
-          <p className={`text-2xl font-bold ${savingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {savingsLabel}
+          <p className={`text-2xl font-bold ${stats.dailyBudget >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+            {stats.daysLeft > 0 ? `${formatCurrency(stats.dailyBudget)}/Tag` : '–'}
           </p>
-          {periodInfo.isPartial && stats.income > 0 && (
-            <p className="text-xs text-dark-500 mt-1">
-              Hochrechnung: ~{formatCurrency(stats.balance / (periodInfo.daysCovered || 1) * (periodInfo.daysInMonth || 30))}/Monat
-            </p>
-          )}
         </div>
 
+        {/* 5. Top-Ausgabe */}
         <div className="glass rounded-2xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2.5 rounded-xl bg-purple-500/15">
-              <ArrowUpDown size={20} className="text-purple-400" />
+              <Trophy size={20} className="text-purple-400" />
             </div>
-            <span className="text-sm text-dark-400">Transaktionen</span>
+            <span className="text-sm text-dark-400">Top-Ausgabe</span>
           </div>
-          <p className="text-2xl font-bold text-purple-400">{stats.txCount}</p>
+          {stats.topCategory ? (
+            <>
+              <p className="text-2xl font-bold text-purple-400">{formatCurrency(stats.topCategory.total)}</p>
+              <p className="text-xs text-dark-400 mt-1">{stats.topCategory.icon} {stats.topCategory.name}</p>
+            </>
+          ) : (
+            <p className="text-2xl font-bold text-dark-500">–</p>
+          )}
         </div>
       </div>
 
