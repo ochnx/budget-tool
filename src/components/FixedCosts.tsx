@@ -6,34 +6,41 @@ import { formatCurrency } from '@/lib/categories'
 import { Repeat, Scissors, AlertTriangle, CheckCircle2, TrendingDown, Wallet, PieChart as PieChartIcon } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-// Keywords that indicate recurring/fixed costs
+// Keywords that indicate recurring/fixed costs — GENEROUS matching!
+// Even a single transaction with a keyword match = Fixkosten
 const RECURRING_KEYWORDS = [
-  // Housing
-  'miete', 'mietvertrag', 'kaltmiete', 'warmmiete', 'nebenkosten', 'hausverwaltung', 'wohnungsbau',
+  // Housing / Miete
+  'miete', 'mietvertrag', 'kaltmiete', 'warmmiete', 'nebenkosten', 'hausverwaltung', 'wohnungsbau', 'agesa',
   // Insurance
   'versicherung', 'haftpflicht', 'krankenversicherung', 'allianz', 'huk', 'ergo',
-  // Subscriptions
+  // Gym/Fitness/Sport
+  'fitnessstudio', 'mcfit', 'gym', 'john reed', 'fitness', 'urban sports', 'aspria',
+  // Streaming & Entertainment Abos
   'spotify', 'netflix', 'disney', 'amazon prime', 'apple', 'icloud', 'google storage',
-  'youtube premium', 'crunchyroll', 'chatgpt', 'openai', 'notion', 'figma', 'adobe',
-  'microsoft', 'github', 'vercel', 'hetzner', 'digitalocean', 'cloudflare',
-  // Gym/Fitness
-  'fitnessstudio', 'mcfit', 'gym', 'john reed', 'fitness', 'urban sports',
+  'youtube premium', 'crunchyroll', 'chatgpt', 'openai',
+  'itunes', 'itunesappst', '.itunesappst',
+  // SaaS / Business Tools
+  'notion', 'figma', 'adobe', 'microsoft', 'github', 'vercel', 'hetzner', 'digitalocean', 'cloudflare',
+  'deadline funnel', 'deadlinefunnel', 'zapier', 'slack', 'fliki', 'capcut', 'higgsfield',
   // Transport subscriptions
   'deutschlandticket', 'mvv', 'bahncard',
   // Phone/Internet
   'telekom', 'vodafone', 'o2', '1&1', 'congstar', 'mobilfunk', 'internet', 'dsl',
   // Utilities
   'strom', 'gas', 'stadtwerke', 'energie', 'swm',
-  // Regular payments
-  'dauerauftrag', 'lastschrift', 'monatlich',
+  // Regular payments / generic keywords
+  'dauerauftrag', 'lastschrift', 'monatlich', 'abo', 'subscription', 'recurring', 'mitglied', 'mitgliedschaft',
+  // PayPal recurring
+  'paypal',
 ]
 
-// Keywords that indicate cancellable/optional subscriptions
-const CANCELLABLE_KEYWORDS = [
-  'spotify', 'netflix', 'disney', 'amazon prime', 'youtube premium', 'crunchyroll',
-  'chatgpt', 'openai', 'notion', 'figma', 'adobe', 'github', 'vercel',
-  'hetzner', 'digitalocean', 'cloudflare', 'mcfit', 'gym', 'john reed',
-  'urban sports', 'fitness',
+// Non-cancellable keywords — these are NOT optional (Miete, Versicherung, Telekom etc.)
+const NON_CANCELLABLE_KEYWORDS = [
+  'miete', 'mietvertrag', 'kaltmiete', 'warmmiete', 'nebenkosten', 'hausverwaltung', 'wohnungsbau', 'agesa',
+  'versicherung', 'haftpflicht', 'krankenversicherung', 'allianz', 'huk', 'ergo',
+  'telekom', 'vodafone', 'o2', '1&1', 'congstar', 'mobilfunk',
+  'strom', 'gas', 'stadtwerke', 'energie', 'swm',
+  'deutschlandticket', 'mvv', 'bahncard',
 ]
 
 type FixedCostItem = {
@@ -87,41 +94,46 @@ export default function FixedCosts() {
     const variableTxs: Transaction[] = []
 
     recipientMap.forEach((txs, key) => {
-      const isRecurring = RECURRING_KEYWORDS.some(kw => key.includes(kw)) || txs.length >= 2
       const searchText = key.toLowerCase()
+      // Also check each transaction's description for keywords (PayPal descriptions etc.)
+      const allText = txs.map(t => 
+        `${(t.recipient || '').toLowerCase()} ${(t.description || '').toLowerCase()}`
+      ).join(' ')
+      const combinedSearch = `${searchText} ${allText}`
       
-      if (isRecurring && txs.length >= 1) {
-        // Check if it looks recurring: similar amounts or matching keywords
-        const hasKeyword = RECURRING_KEYWORDS.some(kw => searchText.includes(kw))
-        const amounts = txs.map(t => Number(t.amount))
-        const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
-        const hasSimilarAmounts = amounts.every(a => Math.abs(a - avgAmount) / avgAmount < 0.15)
+      const hasKeyword = RECURRING_KEYWORDS.some(kw => combinedSearch.includes(kw))
+      
+      // Also match if 2+ transactions from same recipient with similar amounts
+      const amounts = txs.map(t => Number(t.amount))
+      const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
+      const hasSimilarAmounts = amounts.length >= 2 && amounts.every(a => Math.abs(a - avgAmount) / (avgAmount || 1) < 0.15)
+      
+      // KEYWORD MATCH = instant Fixkosten (even with 1 transaction!)
+      // OR 2+ similar-amount transactions = recurring
+      if (hasKeyword || hasSimilarAmounts) {
+        const cat = txs[0].category as Category | undefined
+        // Cancellable = NOT in non-cancellable list
+        const isNonCancellable = NON_CANCELLABLE_KEYWORDS.some(kw => combinedSearch.includes(kw))
+        const isCancellable = !isNonCancellable
         
-        if (hasKeyword || (txs.length >= 2 && hasSimilarAmounts)) {
-          const cat = txs[0].category as Category | undefined
-          const isCancellable = CANCELLABLE_KEYWORDS.some(kw => searchText.includes(kw))
-          
-          // Use the most recent amount as the "monthly" amount
-          const sortedByDate = [...txs].sort((a, b) => 
-            new Date(b.date).getTime() - new Date(a.date).getTime()
-          )
-          const latestAmount = Number(sortedByDate[0].amount)
-          
-          // Try to get a nice display name
-          const displayName = txs[0].recipient || txs[0].description || key
+        // Use the most recent amount as the "monthly" amount
+        const sortedByDate = [...txs].sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+        const latestAmount = Number(sortedByDate[0].amount)
+        
+        // Try to get a nice display name
+        const displayName = txs[0].recipient || txs[0].description || key
 
-          fixedCosts.push({
-            name: displayName,
-            amount: latestAmount,
-            category: cat?.name || 'Unkategorisiert',
-            categoryIcon: cat?.icon || '❓',
-            categoryColor: cat?.color || '#6B7280',
-            isCancellable,
-            transactions: sortedByDate,
-          })
-        } else {
-          variableTxs.push(...txs)
-        }
+        fixedCosts.push({
+          name: displayName,
+          amount: latestAmount,
+          category: cat?.name || 'Unkategorisiert',
+          categoryIcon: cat?.icon || '❓',
+          categoryColor: cat?.color || '#6B7280',
+          isCancellable,
+          transactions: sortedByDate,
+        })
       } else {
         variableTxs.push(...txs)
       }
@@ -132,7 +144,14 @@ export default function FixedCosts() {
 
     const totalFixed = fixedCosts.reduce((sum, fc) => sum + fc.amount, 0)
     const totalCancellable = fixedCosts.filter(fc => fc.isCancellable).reduce((sum, fc) => sum + fc.amount, 0)
-    const totalVariable = variableTxs.reduce((sum, tx) => sum + Number(tx.amount), 0) / 3 // avg monthly
+    // Calculate how many distinct months we have data for
+    const monthSet = new Set<string>()
+    transactions.forEach(tx => {
+      const d = new Date(tx.date)
+      monthSet.add(`${d.getFullYear()}-${d.getMonth()}`)
+    })
+    const monthCount = Math.max(1, monthSet.size)
+    const totalVariable = variableTxs.reduce((sum, tx) => sum + Number(tx.amount), 0) / monthCount
 
     // Group by category for pie chart
     const catMap = new Map<string, { name: string; icon: string; color: string; total: number }>()
@@ -160,6 +179,7 @@ export default function FixedCosts() {
       fixedCount: fixedCosts.length,
       cancellableCount: fixedCosts.filter(fc => fc.isCancellable).length,
       categoryBreakdown,
+      monthCount,
     }
   }, [transactions])
 
@@ -226,7 +246,7 @@ export default function FixedCosts() {
             <span className="text-sm text-dark-400">Ø Variable Kosten</span>
           </div>
           <p className="text-2xl font-bold text-cyan-400">{formatCurrency(analysis.totalVariable)}</p>
-          <p className="text-xs text-dark-500 mt-1">pro Monat (Ø 3 Monate)</p>
+          <p className="text-xs text-dark-500 mt-1">pro Monat (Ø {analysis.monthCount === 1 ? 'aktueller Monat' : `${analysis.monthCount} Monate`})</p>
         </div>
 
         <div className="glass rounded-2xl p-5">
@@ -396,9 +416,8 @@ export default function FixedCosts() {
           <div>
             <p className="text-sm font-medium text-dark-200">Wie erkennt das Tool Fixkosten?</p>
             <p className="text-xs text-dark-400 mt-1">
-              Wiederkehrende Zahlungen werden anhand von Schlüsselwörtern (Miete, Spotify, etc.) und 
-              Mustern (gleicher Empfänger, ähnlicher Betrag über 2+ Monate) erkannt. 
-              Mehr Transaktionsdaten = bessere Erkennung.
+              Fixkosten werden sofort anhand von Schlüsselwörtern (Miete, Spotify, Telekom, etc.) erkannt — 
+              auch bei nur einem Monat Daten. Zusätzlich: gleicher Empfänger mit ähnlichem Betrag über 2+ Monate = automatisch Fixkosten.
             </p>
           </div>
         </div>

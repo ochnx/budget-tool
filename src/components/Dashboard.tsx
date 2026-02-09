@@ -14,6 +14,11 @@ export default function Dashboard() {
     return { month: now.getMonth(), year: now.getFullYear() }
   })
   const [loading, setLoading] = useState(true)
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -112,8 +117,23 @@ export default function Dashboard() {
     )
   }
 
-  // Savings rate
+  // Determine if we have a partial month (less than 20 days of data)
+  const periodInfo = useMemo(() => {
+    if (transactions.length === 0) return { label: '', isPartial: false, daysCovered: 0 }
+    const dates = transactions.map(t => new Date(t.date).getTime())
+    const minDate = new Date(Math.min(...dates))
+    const maxDate = new Date(Math.max(...dates))
+    const daysCovered = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate()
+    const isPartial = daysCovered < daysInMonth * 0.7
+    const weekNum = Math.ceil(daysCovered / 7)
+    const label = isPartial ? `Woche 1–${weekNum}` : ''
+    return { label, isPartial, daysCovered, daysInMonth }
+  }, [transactions, selectedMonth])
+
+  // Savings rate = (Einnahmen - Ausgaben) / Einnahmen × 100
   const savingsRate = stats.income > 0 ? ((stats.balance / stats.income) * 100) : 0
+  const savingsLabel = savingsRate < 0 ? `Defizit ${Math.abs(savingsRate).toFixed(1)}%` : `${savingsRate.toFixed(1)}%`
 
   return (
     <div className="space-y-6">
@@ -160,10 +180,15 @@ export default function Dashboard() {
             <div className="p-2.5 rounded-xl bg-cyan-500/15">
               <Wallet size={20} className="text-cyan-400" />
             </div>
-            <span className="text-sm text-dark-400">Bilanz</span>
+            <span className="text-sm text-dark-400">
+              Bilanz{periodInfo.isPartial ? ` (${periodInfo.label})` : ' diesen Monat'}
+            </span>
           </div>
           <p className={`text-2xl font-bold ${stats.balance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {formatCurrency(stats.balance)}
+            {stats.balance >= 0 ? '+' : ''}{formatCurrency(stats.balance)}
+          </p>
+          <p className="text-xs text-dark-500 mt-1">
+            {formatCurrency(stats.income)} Einnahmen − {formatCurrency(stats.expenses)} Ausgaben
           </p>
         </div>
 
@@ -172,11 +197,18 @@ export default function Dashboard() {
             <div className="p-2.5 rounded-xl bg-amber-500/15">
               <Percent size={20} className="text-amber-400" />
             </div>
-            <span className="text-sm text-dark-400">Sparquote</span>
+            <span className="text-sm text-dark-400">
+              Sparquote{periodInfo.isPartial ? ` (${periodInfo.label})` : ''}
+            </span>
           </div>
           <p className={`text-2xl font-bold ${savingsRate >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {savingsRate.toFixed(1)}%
+            {savingsLabel}
           </p>
+          {periodInfo.isPartial && stats.income > 0 && (
+            <p className="text-xs text-dark-500 mt-1">
+              Hochrechnung: ~{formatCurrency(stats.balance / (periodInfo.daysCovered || 1) * (periodInfo.daysInMonth || 30))}/Monat
+            </p>
+          )}
         </div>
 
         <div className="glass rounded-2xl p-5">
@@ -190,98 +222,105 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Donut Chart — Ausgaben nach Kategorie */}
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Ausgaben nach Kategorie</h3>
-          {stats.categoryBreakdown.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-dark-400">
-              Keine Ausgaben diesen Monat
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={350}>
-              <PieChart>
-                <Pie
-                  data={stats.categoryBreakdown}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={110}
-                  paddingAngle={2}
-                  dataKey="total"
-                  nameKey="name"
-                >
-                  {stats.categoryBreakdown.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-                <Legend 
-                  formatter={(value) => <span className="text-dark-300 text-sm">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Bar Chart — ALL Kategorien, sorted DESC */}
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-lg font-semibold mb-4">
-            Alle Ausgaben-Kategorien
-            <span className="text-sm text-dark-400 font-normal ml-2">
-              ({stats.categoryBreakdown.length} Kategorien)
-            </span>
-          </h3>
-          {stats.categoryBreakdown.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-dark-400">
-              Keine Ausgaben diesen Monat
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(300, stats.categoryBreakdown.length * 44)}>
-              <BarChart 
-                data={stats.categoryBreakdown} 
-                layout="vertical"
-                margin={{ top: 0, right: 60, bottom: 0, left: 10 }}
-              >
-                <XAxis type="number" hide />
-                <YAxis 
-                  type="category" 
-                  dataKey="name" 
-                  width={130}
-                  tick={{ fill: '#94a3b8', fontSize: 13 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip 
-                  content={<CustomTooltip />}
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                />
-                <Bar 
-                  dataKey="total" 
-                  radius={[0, 8, 8, 0]}
-                  barSize={28}
-                  label={({ value, x, y, width, height }: any) => (
-                    <text
-                      x={x + width + 8}
-                      y={y + height / 2}
-                      fill="#94a3b8"
-                      fontSize={12}
-                      dominantBaseline="middle"
+      {/* Charts — only render client-side (Recharts SSR workaround) */}
+      {isMounted && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Donut Chart — Ausgaben nach Kategorie */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-lg font-semibold mb-4">Ausgaben nach Kategorie</h3>
+            {stats.categoryBreakdown.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-dark-400">
+                Keine Ausgaben diesen Monat
+              </div>
+            ) : (
+              <div style={{ width: '100%', height: 350 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.categoryBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={110}
+                      paddingAngle={2}
+                      dataKey="total"
+                      nameKey="name"
+                      isAnimationActive={true}
                     >
-                      {formatCurrency(value)}
-                    </text>
-                  )}
-                >
-                  {stats.categoryBreakdown.map((entry, index) => (
-                    <Cell key={`bar-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+                      {stats.categoryBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend 
+                      formatter={(value) => <span className="text-dark-300 text-sm">{value}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Bar Chart — ALL Kategorien, sorted DESC */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-lg font-semibold mb-4">
+              Alle Ausgaben-Kategorien
+              <span className="text-sm text-dark-400 font-normal ml-2">
+                ({stats.categoryBreakdown.length} Kategorien)
+              </span>
+            </h3>
+            {stats.categoryBreakdown.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-dark-400">
+                Keine Ausgaben diesen Monat
+              </div>
+            ) : (
+              <div style={{ width: '100%', height: Math.max(300, stats.categoryBreakdown.length * 44) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={stats.categoryBreakdown} 
+                    layout="vertical"
+                    margin={{ top: 0, right: 60, bottom: 0, left: 10 }}
+                  >
+                    <XAxis type="number" hide />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name" 
+                      width={130}
+                      tick={{ fill: '#94a3b8', fontSize: 13 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      content={<CustomTooltip />}
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                    />
+                    <Bar 
+                      dataKey="total" 
+                      radius={[0, 8, 8, 0]}
+                      barSize={28}
+                      label={({ value, x, y, width, height }: any) => (
+                        <text
+                          x={x + width + 8}
+                          y={y + height / 2}
+                          fill="#94a3b8"
+                          fontSize={12}
+                          dominantBaseline="middle"
+                        >
+                          {formatCurrency(value)}
+                        </text>
+                      )}
+                    >
+                      {stats.categoryBreakdown.map((entry, index) => (
+                        <Cell key={`bar-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Full Category Breakdown Table */}
       {stats.categoryBreakdown.length > 0 && (
