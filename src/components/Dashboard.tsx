@@ -89,6 +89,24 @@ export default function Dashboard() {
     })
   }
 
+  // Determine if we have a partial month (less than 20 days of data)
+  const periodInfo = useMemo(() => {
+    if (transactions.length === 0) return { label: '', isPartial: false, daysCovered: 0, daysInMonth: 30 }
+    const dates = transactions.map(t => new Date(t.date).getTime())
+    const minDate = new Date(Math.min(...dates))
+    const maxDate = new Date(Math.max(...dates))
+    const daysCovered = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate()
+    const isPartial = daysCovered < daysInMonth * 0.7
+    const weekNum = Math.ceil(daysCovered / 7)
+    const label = isPartial ? `Woche 1–${weekNum}` : ''
+    return { label, isPartial, daysCovered, daysInMonth }
+  }, [transactions, selectedMonth])
+
+  // Savings rate = (Einnahmen - Ausgaben) / Einnahmen × 100
+  const savingsRate = stats.income > 0 ? ((stats.balance / stats.income) * 100) : 0
+  const savingsLabel = savingsRate < 0 ? `Defizit ${Math.abs(savingsRate).toFixed(1)}%` : `${savingsRate.toFixed(1)}%`
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const pct = stats.expenses > 0 
@@ -116,24 +134,6 @@ export default function Dashboard() {
       </div>
     )
   }
-
-  // Determine if we have a partial month (less than 20 days of data)
-  const periodInfo = useMemo(() => {
-    if (transactions.length === 0) return { label: '', isPartial: false, daysCovered: 0 }
-    const dates = transactions.map(t => new Date(t.date).getTime())
-    const minDate = new Date(Math.min(...dates))
-    const maxDate = new Date(Math.max(...dates))
-    const daysCovered = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate()
-    const isPartial = daysCovered < daysInMonth * 0.7
-    const weekNum = Math.ceil(daysCovered / 7)
-    const label = isPartial ? `Woche 1–${weekNum}` : ''
-    return { label, isPartial, daysCovered, daysInMonth }
-  }, [transactions, selectedMonth])
-
-  // Savings rate = (Einnahmen - Ausgaben) / Einnahmen × 100
-  const savingsRate = stats.income > 0 ? ((stats.balance / stats.income) * 100) : 0
-  const savingsLabel = savingsRate < 0 ? `Defizit ${Math.abs(savingsRate).toFixed(1)}%` : `${savingsRate.toFixed(1)}%`
 
   return (
     <div className="space-y-6">
